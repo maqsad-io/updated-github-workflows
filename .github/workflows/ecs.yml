@@ -65,7 +65,9 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         with:
           ssm-path: jango-manager-td
-        run: echo $jango-manager-td
+
+      - name: Print env
+        run: echo "${jango-manager-td}"
 
       #Fetch Task Definition ARN for env
       - name: Get Account ID from Parameter Store
