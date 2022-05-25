@@ -67,7 +67,7 @@ jobs:
           ssm-path: /cdk-bootstrap/hnb659fds/version
 
       - name: Print env
-        run: echo "${jango-manager-td}"
+        run: env
 
       #Fetch Task Definition ARN for env
       - name: Get Account ID from Parameter Store
