@@ -57,11 +57,6 @@ jobs:
           ssm_parameter: ${{steps.extract_account_ids.outputs.accountID}}
           env_variable_name: "ACCOUNT_ROLE"
 
-      - name: Get TASK_DEFINITION_ARN from Parameter Store
-        uses: Bardavon-Health/actions-aws-ssm-params-to-env@v1.2
-        with:
-          ssm-path: jango_manager_td
-
       - name: Print env
         run: env
 
@@ -69,7 +64,7 @@ jobs:
       - name: Get Account ID from Parameter Store
         uses: "marvinpinto/action-inject-ssm-secrets@latest"
         with:
-          ssm_parameter: jango-manager-td
+          ssm_parameter: jango_manager_td
           env_variable_name: "TASK_DEFINITION_ARN"
 
       #Set account arn
