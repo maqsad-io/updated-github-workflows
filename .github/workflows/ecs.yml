@@ -64,7 +64,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         with:
-          ssm-path: jango-manager-td
+          ssm-path: /cdk-bootstrap/hnb659fds/version
 
       - name: Print env
         run: echo "${jango-manager-td}"
