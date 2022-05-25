@@ -57,6 +57,16 @@ jobs:
           ssm_parameter: ${{steps.extract_account_ids.outputs.accountID}}
           env_variable_name: "ACCOUNT_ROLE"
 
+      - name: Get TASK_DEFINITION_ARN from Parameter Store
+        uses: Bardavon-Health/actions-aws-ssm-params-to-env@v1.2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        with:
+          ssm-path: jango-manager-td
+        run: echo $jango-manager-td
+
       #Fetch Task Definition ARN for env
       - name: Get Account ID from Parameter Store
         uses: "marvinpinto/action-inject-ssm-secrets@latest"
