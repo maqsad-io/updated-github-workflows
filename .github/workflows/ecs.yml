@@ -1,0 +1,118 @@
+on:
+  workflow_call:
+    inputs:
+      path:
+        required: true
+        type: string
+      cluster_name:
+        required: true
+        type: string
+      service_name:
+        required: true
+        type: string
+      repository_name:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_REGION:
+        required: true
+      AWS_ROLE:
+        required: true
+jobs:
+  image-deploy:
+    runs-on: ubuntu-latest
+    #     if: github.event.pull_request.merged == 'true'
+    steps:
+      #Get Branch name
+      - name: Extract Branch Name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      #Get account id for account
+      - name: Get Account ID
+        shell: bash
+        run: echo "##[set-output name=accountID;]$(echo account-id-${{steps.extract_branch.outputs.branch}})"
+        id: extract_account_ids
+
+      #Load credentials for tools
+      - name: Load Tools Credentials
+        uses: "aws-actions/configure-aws-credentials@v1"
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      #Fetch account id for env
+      - name: Get Account ID from Parameter Store
+        uses: "marvinpinto/action-inject-ssm-secrets@latest"
+        with:
+          ssm_parameter: ${{steps.extract_account_ids.outputs.accountID}}
+          env_variable_name: "ACCOUNT_ROLE"
+
+      #Fetch Task Definition ARN for env
+      - name: Get Account ID from Parameter Store
+        uses: "marvinpinto/action-inject-ssm-secrets@latest"
+        with:
+          ssm_parameter: jango-manager-td
+          env_variable_name: "TASK_DEFINITION_ARN"
+
+      #Set account arn
+      - name: Account Role
+        shell: bash
+        run: echo "##[set-output name=arn;]$(echo arn:aws:iam::$ACCOUNT_ROLE:role/${{secrets.AWS_ROLE}})"
+        id: account_role_arn
+
+      #Assume role for arn
+      - name: Assume Role in Target Account
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{steps.account_role_arn.outputs.arn}}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-duration-seconds: 900 # 30 min
+
+      #Login to ecr
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      #Push image to ecr
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{inputs.repository_name}}
+          IMAGE_TAG: latest
+        run: |
+          cd ${{ inputs.path }}
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Generate TaskDefinition
+        run: |
+          echo "$TASK_DEFINITION_ARN"
+          aws ecs describe-task-definition \
+          --task-definition $TASK_DEFINITION_ARN \
+          --query taskDefinition > task-definition.json
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: my-container
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Force deployment
+        run: |
+          aws ecs update-service --cluster ${{inputs.cluster_name}} --service ${{inputs.service_name}} --force-new-deployment
